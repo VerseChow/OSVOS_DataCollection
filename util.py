@@ -5,9 +5,17 @@ from numpy import *
 import numpy as np
 from scipy.misc import imread, imresize,imshow
 from sys import stdout
-
+import re
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
+
+
+numbers = re.compile(r'(\d+)')
+def numericalSort(value):
+    parts = numbers.split(value)
+    parts[1::2] = map(int, parts[1::2])
+    return parts
+
 def load_images(pattern):
     fn = sorted(glob(pattern))
     if 'images' in pattern:
@@ -59,9 +67,11 @@ def load_edge_image(label_pattern, image_pattern):
 def input_pipeline(fn_seg, fn_img, batch_size, training = True):
     reader = tf.WholeFileReader()
 
+
     if not len(fn_seg) == len(fn_img):
         raise ValueError('Number of images and segmentations do not match!')
 
+    print fn_img
     with tf.variable_scope('segmentation'):
         fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
         _, value = reader.read(fn_seg_queue)
@@ -78,7 +88,7 @@ def input_pipeline(fn_seg, fn_img, batch_size, training = True):
         img = tf.cast(img, dtype = tf.float32)
         
     if training is True:
-        print 'shuffle'
+        #print 'shuffle!!!!!!!!!!!!!!!!!!!!!!!!!'
         with tf.variable_scope('shuffle'):
             seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
                                                 num_threads=4,
@@ -193,7 +203,9 @@ def build_model(x, y, reuse=None, training=True):
                 padding='same', use_bias=False, reuse=reuse,
                 name='out_prep', trainable = training)  
         logits = tf.reshape(out_prep, [-1, 480, 854])
-        out1 = tf.round(tf.sigmoid(out_prep))
+        #out1 = tf.round(tf.sigmoid(out_prep))
+        out1 = tf.sigmoid(out_prep)
+        
         out = tf.reshape(out1,[-1,480,854],name='out')
         
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
@@ -202,5 +214,10 @@ def build_model(x, y, reuse=None, training=True):
         return out,loss
         
         
-        
-            
+def str2bool(parameter):
+    if parameter.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    if parameter.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')            

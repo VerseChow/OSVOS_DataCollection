@@ -2,35 +2,24 @@ from util import *
 import tensorflow as tf  
 import time, os
 import argparse
+import glob
 from numpy import *
 from scipy.misc import imsave,imshow
 from scipy.ndimage.filters import gaussian_filter1d
-from glob import glob
 from PIL import Image
 import subprocess
 
-def main(edge_flag = False, train_flag = True, train_stage = 1):
-    tf.app.flags.DEFINE_integer('batch_size', 4, 'Number of images in each batch')
-    tf.app.flags.DEFINE_integer('num_epoch', 100, 'Total number of epochs to run for training')
-    tf.app.flags.DEFINE_boolean('training', train_flag, 'If true, train the model; otherwise evaluate the existing model, default is false')
-    tf.app.flags.DEFINE_boolean('edge_training', edge_flag, 'If true, train edge dataset')
-    tf.app.flags.DEFINE_integer('stage', train_stage, '1 train based on all frame, 2 train based on first frame, default is 1')
-    tf.app.flags.DEFINE_float('init_learning_rate', 1e-5, 'Initial learning rate')
-    tf.app.flags.DEFINE_float('learning_rate_decay', 0.8, 'Ratio for decaying the learning rate after each epoch')
-
-    tf.app.flags.DEFINE_string('gpu', '0', 'GPU to be used')
-
-    config = tf.app.flags.FLAGS
+def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './DAVIS'
+    data_dir = './progress_1'
+    result_dir = './results'
  
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
         if not config.edge_training:
-            print('\nLoading data from ./DAVIS')
-            data_dir = './DAVIS'
+            print('\nLoading data from '+data_dir)
             fn_img = []
             fn_seg = []
             if config.stage is 1:
@@ -42,12 +31,15 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                             fn_seg.append(data_dir+s[:-1])
                     
             elif config.stage is 2:
+                '''
                 with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
                     for line in f:
                         i,s = line.split(' ')
                         if ('00000.jpg' in i) and ('00000.png' in s):
                             fn_img.append(data_dir+i)
-                            fn_seg.append(data_dir+s[:-1])
+                            fn_seg.append(data_dir+s[:-1])'''
+                fn_img = [data_dir+'/001.jpg']
+                fn_seg = [data_dir+'/gt/001.png']
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
             logits, loss = build_model(x, y, reuse = None, training = config.training)
@@ -75,15 +67,20 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
             images_val, labels_val = load_edge_image(label_pattern, image_pattern)
         
     else:
-        print('\nLoading data from ./DAVIS')
-        data_dir = './DAVIS'
+        print('\nLoading data from ./progress')
+        #data_dir = './progress'
         fn_img = []
         fn_seg = []
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
+        '''
         with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
             for line in f:
                 i,s = line.split(' ')
                 fn_img.append(data_dir+i)
-                fn_seg.append(data_dir+s[:-1])
+                fn_seg.append(data_dir+s[:-1])'''
+        fn_img = sorted(glob.glob(data_dir+'/*.jpg'), key=numericalSort)
+        fn_seg = sorted(glob.glob(data_dir+'/gt/*.png'), key=numericalSort)
 
         y, x = input_pipeline(fn_seg, fn_img, 1,  training = config.training)
         y = tf.reshape(y, [1, 480, 854])
@@ -91,11 +88,11 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
         logits, loss = build_model(x, y, reuse = None, training = config.training)
         y = tf.to_int64(y, name = 'y')
         val_result = tf.to_int64(logits, name = 'val_result')
-        val_result = tf.concat([y, val_result], axis=2)
-        val_result = tf.cast(255 * tf.reshape(val_result, [-1, 480, 854*2, 1]), tf.uint8)
+        #val_result = tf.concat([y, val_result], axis=2)
+        val_result = tf.cast(255 * tf.reshape(val_result, [-1, 480, 854, 1]), tf.uint8)
         input_image = tf.cast(x, tf.uint8)
-        tf.summary.image('val_result', val_result, max_outputs=8)
-        tf.summary.image('input_image', input_image, max_outputs=8)
+        #tf.summary.image('val_result', val_result, max_outputs=8)
+        #tf.summary.image('input_image', input_image, max_outputs=8)
 
     print('Finished loading in %.2f seconds.' % (time.time() - t0))
     
@@ -108,10 +105,12 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
         sess.run(init)
 
         saver = tf.train.Saver(max_to_keep=10)
+        #ckpt = tf.train.get_checkpoint_state('./pretrained_checkpoint')
         ckpt = tf.train.get_checkpoint_state('./checkpoint')
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
+            #saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
             print('[*] Success to read {}'.format(ckpt_name))
         else:
             if config.training:
@@ -142,7 +141,7 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                     print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
                     % (epoch, config.num_epoch, k, len(fn_seg) // config.batch_size, h, m, s, l_train))
 
-                if epoch % 10 == 0:
+                if epoch % 50 == 0:
                     print('Saving checkpoint ...')
                     saver.save(sess, './checkpoint/Davis.ckpt')
         else:
@@ -156,10 +155,11 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
 
                 writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), k)
                 print('Evaluate picture %d/%d' % (k, len(fn_seg)))
-                result = reshape(result, (480, 854*2))
+                result = reshape(result, (480, 854))
                 im = Image.fromarray(result)
-                im.save('1.png')
-                p = subprocess.Popen(["display", "1.png"])
+                img_name = os.path.basename(fn_seg[k])
+                im.save(result_dir+'/'+img_name)
+                p = subprocess.Popen(["display", result_dir+'/'+img_name])
                 time.sleep(1)
                 p.kill()
                     
@@ -169,19 +169,32 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='OSVOS_demo')
-    parser.add_argument('--edge', dest='edge_flag', help='set edge_flag, default is False',
-                        default=False, type=bool)
-    parser.add_argument('--train', dest='train_flag', help='set train_flag, default is True',
-                        default=True, type=bool)
-    parser.add_argument('--stage', dest='train_stage', help='set train_stage, default is 1',
-                        default=1, type=int)   
-    args = parser.parse_args()
+    parser.add_argument('--edge', dest='edge_training', help='set edge_flag, default is False',
+                        default=False, type=str2bool)
+    parser.add_argument('--train', dest='training', help='set train_flag, default is True',
+                        default=True, type=str2bool)
+    parser.add_argument('--stage', dest='stage', help='set train_stage, default is 1',
+                        default=2, type=int)
+    parser.add_argument('--batch_size', dest='batch_size', help='Number of images in each batch',
+                        default=1, type=int)
+    parser.add_argument('--num_epoch', dest='num_epoch', help='Total number of epochs to run for training',
+                        default=1000, type=int)
+    parser.add_argument('--init_learning_rate', dest='init_learning_rate', help='Initial learning rate',
+                        default=1e-4, type=float)
+    parser.add_argument('--learning_rate_decay', dest='learning_rate_decay', help='Ratio for decaying the learning rate after each epoch',
+                        default=1, type=float)
+    parser.add_argument('--gpu', dest='gpu', help='GPU to be used',
+                        default='0', type=str)
 
-    return args
+
+    config = parser.parse_args()
+
+
+    return config
 
 if __name__ == '__main__':
-    parser = parse_args()
-    main(parser.edge_flag, train_flag = parser.train_flag, train_stage = parser.train_stage)
+    config = parse_args()
+    main(config)
 
     
 
