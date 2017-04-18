@@ -4,15 +4,15 @@ import time, os
 import argparse
 import glob
 from numpy import *
-from scipy.misc import imsave,imshow
-from scipy.ndimage.filters import gaussian_filter1d
+from scipy.misc import imsave,imshow 
+from scipy.signal import medfilt
 from PIL import Image
 import subprocess
-
+from scipy.ndimage.filters import median_filter
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './progress_1'
+    data_dir = './chair/01'
     result_dir = './results'
  
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
@@ -38,8 +38,8 @@ def main(config):
                         if ('00000.jpg' in i) and ('00000.png' in s):
                             fn_img.append(data_dir+i)
                             fn_seg.append(data_dir+s[:-1])'''
-                fn_img = [data_dir+'/001.jpg']
-                fn_seg = [data_dir+'/gt/001.png']
+                fn_img = [data_dir+'/001.jpg', data_dir+'/056.jpg']
+                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/056.png']
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
             logits, loss = build_model(x, y, reuse = None, training = config.training)
@@ -67,7 +67,7 @@ def main(config):
             images_val, labels_val = load_edge_image(label_pattern, image_pattern)
         
     else:
-        print('\nLoading data from ./progress')
+        print('\nLoading data from '+data_dir)
         #data_dir = './progress'
         fn_img = []
         fn_seg = []
@@ -82,6 +82,9 @@ def main(config):
         fn_img = sorted(glob.glob(data_dir+'/*.jpg'), key=numericalSort)
         fn_seg = sorted(glob.glob(data_dir+'/gt/*.png'), key=numericalSort)
 
+        fn_seg = [fn_seg[0]]*len(fn_img)
+        print fn_seg
+
         y, x = input_pipeline(fn_seg, fn_img, 1,  training = config.training)
         y = tf.reshape(y, [1, 480, 854])
         x = tf.reshape(x, [1, 480, 854, 3])
@@ -89,7 +92,7 @@ def main(config):
         y = tf.to_int64(y, name = 'y')
         val_result = tf.to_int64(logits, name = 'val_result')
         #val_result = tf.concat([y, val_result], axis=2)
-        val_result = tf.cast(255 * tf.reshape(val_result, [-1, 480, 854, 1]), tf.uint8)
+        val_result = tf.cast(tf.reshape(val_result, [-1, 480, 854, 1]), tf.uint8)
         input_image = tf.cast(x, tf.uint8)
         #tf.summary.image('val_result', val_result, max_outputs=8)
         #tf.summary.image('input_image', input_image, max_outputs=8)
@@ -150,18 +153,29 @@ def main(config):
             threads = tf.train.start_queue_runners(coord=coord)
             lr = config.init_learning_rate * config.learning_rate_decay    
 
-            for k in range(len(fn_seg)):
+            for k in range(len(fn_img)):
                 result = sess.run(val_result)
+                #result = result.astype(float)
+                #index = result > config.threshold
+                #print result
+                #result[index] = 1
+                
 
+                result = 255*result
+                #result = medfilt(result, 3)
                 writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), k)
-                print('Evaluate picture %d/%d' % (k, len(fn_seg)))
+                print('Evaluate picture %d/%d' % (k+1, len(fn_img)))
                 result = reshape(result, (480, 854))
-                im = Image.fromarray(result)
-                img_name = os.path.basename(fn_seg[k])
-                im.save(result_dir+'/'+img_name)
-                p = subprocess.Popen(["display", result_dir+'/'+img_name])
-                time.sleep(1)
-                p.kill()
+                result = median_filter(result, 9)
+                #result = uint8(result)
+                #im = Image.fromarray(result)
+                img_name = os.path.basename(fn_img[k])
+                img_name = os.path.splitext(img_name)[0]
+
+                imsave(result_dir+'/'+img_name+'.png', result)
+                #p = subprocess.Popen(["display", result_dir+'/'+img_name+'.png'])
+                #time.sleep(1)
+                #p.kill()
                     
                 
 
@@ -180,11 +194,14 @@ def parse_args():
     parser.add_argument('--num_epoch', dest='num_epoch', help='Total number of epochs to run for training',
                         default=1000, type=int)
     parser.add_argument('--init_learning_rate', dest='init_learning_rate', help='Initial learning rate',
-                        default=1e-4, type=float)
+                        default=1e-5, type=float)
     parser.add_argument('--learning_rate_decay', dest='learning_rate_decay', help='Ratio for decaying the learning rate after each epoch',
                         default=1, type=float)
     parser.add_argument('--gpu', dest='gpu', help='GPU to be used',
                         default='0', type=str)
+    parser.add_argument('--threshold', dest='threshold', help='threshold to display',
+                        default=0, type=float)
+
 
 
     config = parser.parse_args()

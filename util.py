@@ -66,26 +66,22 @@ def load_edge_image(label_pattern, image_pattern):
 
 def input_pipeline(fn_seg, fn_img, batch_size, training = True):
     reader = tf.WholeFileReader()
-
-
-    if not len(fn_seg) == len(fn_img):
-        raise ValueError('Number of images and segmentations do not match!')
-
+       
     print fn_img
-    with tf.variable_scope('segmentation'):
-        fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
-        _, value = reader.read(fn_seg_queue)
-        seg = tf.image.decode_png(value, channels=1, dtype=tf.uint8)
-        seg = tf.image.resize_images(seg, [480, 854], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        seg = tf.reshape(seg, [480, 854])
-        
-
+    if not len(fn_seg) == len(fn_img):
+            raise ValueError('Number of images and segmentations do not match!')
     with tf.variable_scope('image'):
         fn_img_queue = tf.train.string_input_producer(fn_img, shuffle=False)
         _, value = reader.read(fn_img_queue)
         img = tf.image.decode_jpeg(value, channels=3)
         img = tf.image.resize_images(img, [480, 854], method=tf.image.ResizeMethod.BILINEAR)
         img = tf.cast(img, dtype = tf.float32)
+    with tf.variable_scope('segmentation'):
+        fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
+        _, value = reader.read(fn_seg_queue)
+        seg = tf.image.decode_png(value, channels=1, dtype=tf.uint8)
+        seg = tf.image.resize_images(seg, [480, 854], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        seg = tf.reshape(seg, [480, 854])
         
     if training is True:
         #print 'shuffle!!!!!!!!!!!!!!!!!!!!!!!!!'
@@ -94,8 +90,8 @@ def input_pipeline(fn_seg, fn_img, batch_size, training = True):
                                                 num_threads=4,
                                                 capacity=1000 + 3 * batch_size,
                                                 min_after_dequeue=1000)
-
     return seg/255, img
+
 
 def conv_relu_vgg(x, reuse=None, name='conv_vgg', training = True):
     kernel = vgg_weights[name][0]
@@ -115,7 +111,7 @@ def upconv_relu(x, num_filters, ksize=3, stride=2, reuse=None, name='upconv', tr
                 name='conv2d_transpose', trainable = training)
         return tf.nn.relu(x, name='relu')
 
-def build_model(x, y, reuse=None, training=True):
+def build_model(x, y, reuse=None, training=True, threshold = 0.5):
     with tf.variable_scope('OSVOS'):
         
         x = x[..., ::-1] - [103.939, 116.779, 123.68]
@@ -202,17 +198,20 @@ def build_model(x, y, reuse=None, training=True):
         out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
                 padding='same', use_bias=False, reuse=reuse,
                 name='out_prep', trainable = training)  
-        logits = tf.reshape(out_prep, [-1, 480, 854])
+        
+        threshold = tf.constant(threshold, dtype = float32)
+        out1 = tf.floordiv(tf.sigmoid(out_prep), threshold, name=None)
+
         #out1 = tf.round(tf.sigmoid(out_prep))
-        out1 = tf.sigmoid(out_prep)
+        #out1 = tf.sigmoid(out_prep)
         
         out = tf.reshape(out1,[-1,480,854],name='out')
-        
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
+        logits = tf.reshape(out_prep, [-1, 480, 854])
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                                logits=logits, labels=tf.to_float(y)),name = "loss")
+                               logits=logits, labels=tf.to_float(y)),name = "loss")
         return out,loss
-        
+     
         
 def str2bool(parameter):
     if parameter.lower() in ('yes', 'true', 't', 'y', '1'):
