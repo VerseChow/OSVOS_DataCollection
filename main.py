@@ -17,7 +17,8 @@ def main(config):
     data_dir = './chair/01'
     result_dir = './results'
     resize_image_dir = './progress_slam++/JPEGImages'
- 
+    xml_path = './progress_slam++/Annotations'
+    txt_path = './progress_slam++/ImageSets/Main'
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
@@ -98,7 +99,7 @@ def main(config):
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        saver = tf.train.Saver(max_to_keep=10)
+        saver = tf.train.Saver(max_to_keep=2)
         #ckpt = tf.train.get_checkpoint_state('./pretrained_checkpoint')
         ckpt = tf.train.get_checkpoint_state('./checkpoint')
         if ckpt and ckpt.model_checkpoint_path:
@@ -163,11 +164,20 @@ def main(config):
                     print('Evaluate picture %d/%d :: BBox size is height:[%d, %d] width:[%d, %d]' % (k+1, len(fn_img), 
                         slice_x.start, slice_x.stop, slice_y.start, slice_y.stop))
                     imsave(result_dir+'/'+img_name+'.png', result)
-                    imsave(resize_image_dir+'/'+config.object+time.strftime("%d_%m_%Y")+'_'+str(count)+'.jpg', image[0])
+
+                    img_path = resize_image_dir+'/'+config.object+time.strftime("%d_%m_%Y")+'_'+str(count)+'.jpg'
+
+                    imsave(img_path, image[0])
                     count = count+1
+                    bbox = bbox_property(slice_x.start, slice_x.stop, slice_y.start, slice_y.stop, config.object)
+                    print('Writing .XML File!')
+                    write_xml(img_path, xml_path, bbox)
+
             coord.request_stop()         
             coord.join(threads)
-                
+            print('Writing .txt File!')
+            write_txt(resize_image_dir, txt_path, 'test', config.object)
+            print('Writing Done!')
 
 
 def parse_args():

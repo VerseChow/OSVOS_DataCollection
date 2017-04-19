@@ -8,9 +8,19 @@ from sys import stdout
 import re
 from scipy import ndimage
 import matplotlib.pyplot as plt
+from lxml import etree
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
 numbers = re.compile(r'(\d+)')
+
+class bbox_property:
+    def __init__(self, xmin, xmax, ymin, ymax, label):
+        self.label = label
+        self.xmin = str(xmin)
+        self.xmax = str(xmax)
+        self.ymin = str(ymin)
+        self.ymax = str(ymax)
+
 
 def numericalSort(value):
     parts = numbers.split(value)
@@ -201,6 +211,8 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.9):
                 name='out_prep', trainable = training)  
         
         threshold = tf.constant(threshold, dtype = float32)
+
+        #filter based on threshold
         out1 = tf.floordiv(tf.sigmoid(out_prep), threshold, name=None)
 
         #out1 = tf.round(tf.sigmoid(out_prep))
@@ -240,11 +252,78 @@ def bbox_generate(image):
     slice_x, slice_y = ndimage.find_objects(label_im==(len(labels)-1))[0] #find the largest one
 
     return slice_x, slice_y 
-    #roi = image[slice_x, slice_y]
 
-    #plt.figure(figsize=(4, 2))
-    #plt.axes([0, 0, 1, 1])
-    #plt.imshow(roi)
-    #plt.axis('off')
+def write_txt(datapath, writepath, set_name, label):
 
-    #plt.show()
+    if not os.path.exists(writepath):
+            os.makedirs(writepath)
+    
+    im_list = sorted(glob(datapath+'/*'+label+'*.jpg'), key=numericalSort)
+    
+    with open(writepath+'/'+set_name+'.txt', 'w') as f:
+        for im in im_list:
+            im = os.path.basename(im)
+            im = os.path.splitext(im)[0]
+            f.write(im+'\n')
+
+def write_xml(file_name, writepath, bbox):
+
+    if not os.path.exists(writepath):
+            os.makedirs(writepath)
+
+    label = bbox.label
+
+    xml_file_name = os.path.basename(file_name)
+    xml_file_name = os.path.splitext(xml_file_name)[0]+'.xml'
+    with open(writepath +'/'+ xml_file_name, 'w') as out:
+
+        img = imread(file_name)
+        print img.shape
+
+        root = etree.Element('annotation')
+        chd_folder = etree.Element('folder')
+        chd_folder.text = 'progress_slam++'
+        root.append(chd_folder)
+        chd_fname = etree.Element('filename')
+        chd_fname.text = os.path.basename(file_name)
+        root.append(chd_fname)
+
+        chd_size = etree.Element('size')
+        chd_size_width = etree.Element('width')
+        chd_size_width.text = str(img.shape[1]) 
+        chd_size_height = etree.Element('height')
+        chd_size_height.text = str(img.shape[0])
+        chd_size_depth = etree.Element('depth')
+        chd_size_depth.text = str(img.shape[2])
+        chd_size.append(chd_size_width)
+        chd_size.append(chd_size_height)
+        chd_size.append(chd_size_depth)         
+        root.append(chd_size)
+
+        chd_obj = etree.Element('object')
+        chd_obj_name = etree.Element('name')
+        chd_obj_name.text = label
+        chd_obj.append(chd_obj_name)
+        chd_obj_bbox = etree.Element('bndbox')
+        chd_obj_bbox_xmin = etree.Element('xmin')   
+        chd_obj_bbox_xmin.text = bbox.xmin
+        chd_obj_bbox.append(chd_obj_bbox_xmin)
+        chd_obj_bbox_ymin = etree.Element('ymin')   
+        chd_obj_bbox_ymin.text = bbox.ymin
+        chd_obj_bbox.append(chd_obj_bbox_ymin)
+        chd_obj_bbox_xmax = etree.Element('xmax')   
+        chd_obj_bbox_xmax.text = bbox.xmax 
+        chd_obj_bbox.append(chd_obj_bbox_xmax)
+        chd_obj_bbox_ymax = etree.Element('ymax')   
+        chd_obj_bbox_ymax.text = bbox.ymax 
+        chd_obj_bbox.append(chd_obj_bbox_ymax)
+        chd_obj.append(chd_obj_bbox)
+        root.append(chd_obj)
+
+
+        s = etree.tostring(root, pretty_print=True)
+
+        print s
+        out.write(s)
+
+        print('Writing Done!')
