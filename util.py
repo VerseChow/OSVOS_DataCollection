@@ -6,11 +6,12 @@ import numpy as np
 from scipy.misc import imread, imresize,imshow
 from sys import stdout
 import re
+from scipy import ndimage
+import matplotlib.pyplot as plt
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
-
-
 numbers = re.compile(r'(\d+)')
+
 def numericalSort(value):
     parts = numbers.split(value)
     parts[1::2] = map(int, parts[1::2])
@@ -67,21 +68,21 @@ def load_edge_image(label_pattern, image_pattern):
 def input_pipeline(fn_seg, fn_img, batch_size, training = True):
     reader = tf.WholeFileReader()
        
-    print fn_img
+    #print fn_img
     if not len(fn_seg) == len(fn_img):
             raise ValueError('Number of images and segmentations do not match!')
     with tf.variable_scope('image'):
         fn_img_queue = tf.train.string_input_producer(fn_img, shuffle=False)
         _, value = reader.read(fn_img_queue)
         img = tf.image.decode_jpeg(value, channels=3)
-        img = tf.image.resize_images(img, [480, 854], method=tf.image.ResizeMethod.BILINEAR)
+        img = tf.image.resize_images(img, [480, 640], method=tf.image.ResizeMethod.BILINEAR)
         img = tf.cast(img, dtype = tf.float32)
     with tf.variable_scope('segmentation'):
         fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
         _, value = reader.read(fn_seg_queue)
         seg = tf.image.decode_png(value, channels=1, dtype=tf.uint8)
-        seg = tf.image.resize_images(seg, [480, 854], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        seg = tf.reshape(seg, [480, 854])
+        seg = tf.image.resize_images(seg, [480, 640], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        seg = tf.reshape(seg, [480, 640])
         
     if training is True:
         #print 'shuffle!!!!!!!!!!!!!!!!!!!!!!!!!'
@@ -111,7 +112,7 @@ def upconv_relu(x, num_filters, ksize=3, stride=2, reuse=None, name='upconv', tr
                 name='conv2d_transpose', trainable = training)
         return tf.nn.relu(x, name='relu')
 
-def build_model(x, y, reuse=None, training=True, threshold = 0.5):
+def build_model(x, y, reuse=None, training=True, threshold = 0.9):
     with tf.variable_scope('OSVOS'):
         
         x = x[..., ::-1] - [103.939, 116.779, 123.68]
@@ -164,7 +165,7 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.5):
                 padding='same', use_bias=False, reuse=reuse,
                 name='up2', trainable = training)
         start1 = (up2.shape[1]-480)/2
-        start2 = (up2.shape[2]-854)/2
+        start2 = (up2.shape[2]-640)/2
         end1 = up2.shape[1]-start1
         end2 = up2.shape[2]-start2 
         up2c = up2[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up2, 480, 854)
@@ -172,7 +173,7 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.5):
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up3', trainable = training)
         start1 = (up3.shape[1]-480)/2
-        start2 = (up3.shape[2]-854)/2
+        start2 = (up3.shape[2]-640)/2
         end1 = up3.shape[1]-start1
         end2 = up3.shape[2]-start2 
         up3c = up3[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up3, 480, 854)
@@ -180,7 +181,7 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.5):
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up4', trainable = training)
         start1 = (up4.shape[1]-480)/2
-        start2 = (up4.shape[2]-854)/2
+        start2 = (up4.shape[2]-640)/2
         end1 = up4.shape[1]-start1
         end2 = up4.shape[2]-start2 
         up4c = up4[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up4, 480, 854)
@@ -188,7 +189,7 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.5):
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up5', trainable = training)
         start1 = (up5.shape[1]-480)/2
-        start2 = (up5.shape[2]-854)/2
+        start2 = (up5.shape[2]-640)/2
         end1 = up5.shape[1]-start1
         end2 = up5.shape[2]-start2 
         up5c = up5[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up5, 480, 854)
@@ -205,9 +206,9 @@ def build_model(x, y, reuse=None, training=True, threshold = 0.5):
         #out1 = tf.round(tf.sigmoid(out_prep))
         #out1 = tf.sigmoid(out_prep)
         
-        out = tf.reshape(out1,[-1,480,854],name='out')
+        out = tf.reshape(out1,[-1,480,640],name='out')
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
-        logits = tf.reshape(out_prep, [-1, 480, 854])
+        logits = tf.reshape(out_prep, [-1, 480, 640])
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                logits=logits, labels=tf.to_float(y)),name = "loss")
         return out,loss
@@ -220,3 +221,30 @@ def str2bool(parameter):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')            
+
+def bbox_generate(image):
+
+    mask = image>0
+
+    label_im, nb_labels = ndimage.label(mask)
+
+    # Find the largest connect component
+    sizes = ndimage.sum(mask, label_im, range(nb_labels + 1))#sizes of connected component. a lists
+    mask_size = sizes < 100
+    remove_pixel = mask_size[label_im]
+    label_im[remove_pixel] = 0
+    labels = unique(label_im)
+    label_im = searchsorted(labels, label_im)
+
+    # Now that we have only one connect component, extract it's bounding box
+    slice_x, slice_y = ndimage.find_objects(label_im==(len(labels)-1))[0] #find the largest one
+
+    return slice_x, slice_y 
+    #roi = image[slice_x, slice_y]
+
+    #plt.figure(figsize=(4, 2))
+    #plt.axes([0, 0, 1, 1])
+    #plt.imshow(roi)
+    #plt.axis('off')
+
+    #plt.show()

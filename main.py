@@ -9,11 +9,14 @@ from scipy.signal import medfilt
 from PIL import Image
 import subprocess
 from scipy.ndimage.filters import median_filter
+
+#default resolution is 640*480
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
     data_dir = './chair/01'
     result_dir = './results'
+    resize_image_dir = './progress_slam++/JPEGImages'
  
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
@@ -31,13 +34,7 @@ def main(config):
                             fn_seg.append(data_dir+s[:-1])
                     
             elif config.stage is 2:
-                '''
-                with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
-                    for line in f:
-                        i,s = line.split(' ')
-                        if ('00000.jpg' in i) and ('00000.png' in s):
-                            fn_img.append(data_dir+i)
-                            fn_seg.append(data_dir+s[:-1])'''
+
                 fn_img = [data_dir+'/001.jpg', data_dir+'/056.jpg']
                 fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/056.png']
 
@@ -47,7 +44,7 @@ def main(config):
             y = tf.to_int64(y, name = 'y')
             pred_train = tf.to_int64(logits, name = 'pred_train')
             result_train = tf.concat([y, pred_train], axis=2)
-            result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 854*2, 1]), tf.uint8)
+            result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 640*2, 1]), tf.uint8)
             tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
             num_param = 0
             vars_trainable = tf.trainable_variables()
@@ -73,29 +70,23 @@ def main(config):
         fn_seg = []
         if not os.path.exists(result_dir):
             os.makedirs(result_dir)
-        '''
-        with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
-            for line in f:
-                i,s = line.split(' ')
-                fn_img.append(data_dir+i)
-                fn_seg.append(data_dir+s[:-1])'''
+        if not os.path.exists(resize_image_dir):
+            os.makedirs(resize_image_dir)
+
         fn_img = sorted(glob.glob(data_dir+'/*.jpg'), key=numericalSort)
         fn_seg = sorted(glob.glob(data_dir+'/gt/*.png'), key=numericalSort)
 
         fn_seg = [fn_seg[0]]*len(fn_img)
-        print fn_seg
+        #print fn_seg
 
         y, x = input_pipeline(fn_seg, fn_img, 1,  training = config.training)
-        y = tf.reshape(y, [1, 480, 854])
-        x = tf.reshape(x, [1, 480, 854, 3])
+        y = tf.reshape(y, [1, 480, 640])
+        x = tf.reshape(x, [1, 480, 640, 3])
         logits, loss = build_model(x, y, reuse = None, training = config.training)
         y = tf.to_int64(y, name = 'y')
         val_result = tf.to_int64(logits, name = 'val_result')
-        #val_result = tf.concat([y, val_result], axis=2)
-        val_result = tf.cast(tf.reshape(val_result, [-1, 480, 854, 1]), tf.uint8)
+        val_result = tf.cast(tf.reshape(val_result, [-1, 480, 640, 1]), tf.uint8)
         input_image = tf.cast(x, tf.uint8)
-        #tf.summary.image('val_result', val_result, max_outputs=8)
-        #tf.summary.image('input_image', input_image, max_outputs=8)
 
     print('Finished loading in %.2f seconds.' % (time.time() - t0))
     
@@ -147,36 +138,35 @@ def main(config):
                 if epoch % 50 == 0:
                     print('Saving checkpoint ...')
                     saver.save(sess, './checkpoint/Davis.ckpt')
+            coord.request_stop()         
+            coord.join(threads)
         else:
-            writer = tf.summary.FileWriter("./logs", sess.graph)
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
-            lr = config.init_learning_rate * config.learning_rate_decay    
-
+            count = 1
             for k in range(len(fn_img)):
-                result = sess.run(val_result)
-                #result = result.astype(float)
-                #index = result > config.threshold
-                #print result
-                #result[index] = 1
-                
+                result, image = sess.run([val_result, x])
 
+                result = reshape(result, (480, 640))
+                result = around(median_filter(result, 15))
                 result = 255*result
-                #result = medfilt(result, 3)
-                writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), k)
-                print('Evaluate picture %d/%d' % (k+1, len(fn_img)))
-                result = reshape(result, (480, 854))
-                result = median_filter(result, 9)
-                #result = uint8(result)
-                #im = Image.fromarray(result)
-                img_name = os.path.basename(fn_img[k])
-                img_name = os.path.splitext(img_name)[0]
 
-                imsave(result_dir+'/'+img_name+'.png', result)
-                #p = subprocess.Popen(["display", result_dir+'/'+img_name+'.png'])
-                #time.sleep(1)
-                #p.kill()
-                    
+                slice_x, slice_y = bbox_generate(result)
+                height = slice_x.stop-slice_x.start+1
+                width = slice_y.stop-slice_y.start+1
+                if width == 640 and height == 480:
+                    print('Evaluate picture %d/%d !!!!Not meet requirement' % (k+1, len(fn_img)))
+                    pass
+                else:
+                    img_name = os.path.basename(fn_img[k])
+                    img_name = os.path.splitext(img_name)[0]
+                    print('Evaluate picture %d/%d :: BBox size is height:[%d, %d] width:[%d, %d]' % (k+1, len(fn_img), 
+                        slice_x.start, slice_x.stop, slice_y.start, slice_y.stop))
+                    imsave(result_dir+'/'+img_name+'.png', result)
+                    imsave(resize_image_dir+'/'+config.object+time.strftime("%d_%m_%Y")+'_'+str(count)+'.jpg', image[0])
+                    count = count+1
+            coord.request_stop()         
+            coord.join(threads)
                 
 
 
@@ -190,7 +180,7 @@ def parse_args():
     parser.add_argument('--stage', dest='stage', help='set train_stage, default is 1',
                         default=2, type=int)
     parser.add_argument('--batch_size', dest='batch_size', help='Number of images in each batch',
-                        default=1, type=int)
+                        default=2, type=int)
     parser.add_argument('--num_epoch', dest='num_epoch', help='Total number of epochs to run for training',
                         default=1000, type=int)
     parser.add_argument('--init_learning_rate', dest='init_learning_rate', help='Initial learning rate',
@@ -202,7 +192,8 @@ def parse_args():
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
                         default=0, type=float)
 
-
+    parser.add_argument('--object', dest='object', help='object for data collection',
+                        default='chair', type=str)
 
     config = parser.parse_args()
 
