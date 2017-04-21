@@ -282,7 +282,7 @@ def write_xml(file_name, writepath, bbox):
 
         root = etree.Element('annotation')
         chd_folder = etree.Element('folder')
-        chd_folder.text = 'progress_slam++'
+        chd_folder.text = 'progress'
         root.append(chd_folder)
         chd_fname = etree.Element('filename')
         chd_fname.text = os.path.basename(file_name)

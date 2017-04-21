@@ -16,9 +16,9 @@ def main(config):
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
     data_dir = './chair/01'
     result_dir = './results'
-    resize_image_dir = './progress_slam++/JPEGImages'
-    xml_path = './progress_slam++/Annotations'
-    txt_path = './progress_slam++/ImageSets/Main'
+    resize_image_dir = './progress/JPEGImages'
+    xml_path = './progress/Annotations'
+    txt_path = './progress/ImageSets/Main'
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
@@ -155,7 +155,7 @@ def main(config):
                 slice_x, slice_y = bbox_generate(result)
                 height = slice_x.stop-slice_x.start+1
                 width = slice_y.stop-slice_y.start+1
-                if width == 640 and height == 480:
+                if (width == 640 or height == 480) or (width <=10 or height <= 10):
                     print('Evaluate picture %d/%d !!!!Not meet requirement' % (k+1, len(fn_img)))
                     pass
                 else:
@@ -169,14 +169,14 @@ def main(config):
 
                     imsave(img_path, image[0])
                     count = count+1
-                    bbox = bbox_property(slice_x.start, slice_x.stop, slice_y.start, slice_y.stop, config.object)
+                    bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, config.object)
                     print('Writing .XML File!')
                     write_xml(img_path, xml_path, bbox)
 
             coord.request_stop()         
             coord.join(threads)
             print('Writing .txt File!')
-            write_txt(resize_image_dir, txt_path, 'test', config.object)
+            write_txt(resize_image_dir, txt_path, 'train', config.object)
             print('Writing Done!')
 
 
