@@ -122,7 +122,7 @@ def upconv_relu(x, num_filters, ksize=3, stride=2, reuse=None, name='upconv', tr
                 name='conv2d_transpose', trainable = training)
         return tf.nn.relu(x, name='relu')
 
-def build_model(x, y, reuse=None, training=True, threshold = 0.9):
+def build_model(x, y, reuse=None, training=True, threshold = 0.5):
     with tf.variable_scope('OSVOS'):
         
         x = x[..., ::-1] - [103.939, 116.779, 123.68]
@@ -242,14 +242,16 @@ def bbox_generate(image):
 
     # Find the largest connect component
     sizes = ndimage.sum(mask, label_im, range(nb_labels + 1))#sizes of connected component. a lists
-    mask_size = sizes < 100
+
+    mask_size = sizes < 1000
     remove_pixel = mask_size[label_im]
     label_im[remove_pixel] = 0
     labels = unique(label_im)
-    label_im = searchsorted(labels, label_im)
 
+    label_im = searchsorted(labels, label_im)
+  
     # Now that we have only one connect component, extract it's bounding box
-    slice_x, slice_y = ndimage.find_objects(label_im==(len(labels)-1))[0] #find the largest one
+    slice_x, slice_y = ndimage.find_objects(label_im==1)[0] #find the largest one
 
     return slice_x, slice_y 
 
@@ -302,7 +304,7 @@ def write_xml(file_name, writepath, bbox):
 
         chd_obj = etree.Element('object')
         chd_obj_name = etree.Element('name')
-        chd_obj_name.text = label
+        chd_obj_name.text = bbox.label
         chd_obj.append(chd_obj_name)
         chd_obj_bbox = etree.Element('bndbox')
         chd_obj_bbox_xmin = etree.Element('xmin')   

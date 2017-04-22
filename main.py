@@ -14,7 +14,7 @@ from scipy.ndimage.filters import median_filter
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './chair/01'
+    data_dir = './chair/side_2'
     result_dir = './results'
     resize_image_dir = './progress/JPEGImages'
     xml_path = './progress/Annotations'
@@ -36,8 +36,9 @@ def main(config):
                     
             elif config.stage is 2:
 
-                fn_img = [data_dir+'/001.jpg', data_dir+'/056.jpg']
-                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/056.png']
+                fn_img = [data_dir+'/001.jpg', data_dir+'/031.jpg']
+                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/031.png']
+                config.batch_size = len(fn_img)
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
             logits, loss = build_model(x, y, reuse = None, training = config.training)
@@ -100,8 +101,12 @@ def main(config):
         sess.run(init)
 
         saver = tf.train.Saver(max_to_keep=2)
-        #ckpt = tf.train.get_checkpoint_state('./pretrained_checkpoint')
-        ckpt = tf.train.get_checkpoint_state('./checkpoint')
+
+        if config.training:
+            ckpt = tf.train.get_checkpoint_state('./checkpoint')
+        else:
+            ckpt = tf.train.get_checkpoint_state('./checkpoint')
+
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
@@ -134,9 +139,9 @@ def main(config):
                     m, s = divmod(time.time() - t0, 60)
                     h, m = divmod(m, 60)
                     print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
-                    % (epoch, config.num_epoch, k, len(fn_seg) // config.batch_size, h, m, s, l_train))
+                    % (epoch+1, config.num_epoch, k+1, len(fn_seg) // config.batch_size, h, m, s, l_train))
 
-                if epoch % 50 == 0:
+                if epoch % 100 == 0:
                     print('Saving checkpoint ...')
                     saver.save(sess, './checkpoint/Davis.ckpt')
             coord.request_stop()         
@@ -149,7 +154,7 @@ def main(config):
                 result, image = sess.run([val_result, x])
 
                 result = reshape(result, (480, 640))
-                result = around(median_filter(result, 15))
+                result = around(median_filter(result, 9))
                 result = 255*result
 
                 slice_x, slice_y = bbox_generate(result)
@@ -169,7 +174,7 @@ def main(config):
 
                     imsave(img_path, image[0])
                     count = count+1
-                    bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, config.object)
+                    bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, config.label)
                     print('Writing .XML File!')
                     write_xml(img_path, xml_path, bbox)
 
@@ -190,7 +195,7 @@ def parse_args():
     parser.add_argument('--stage', dest='stage', help='set train_stage, default is 1',
                         default=2, type=int)
     parser.add_argument('--batch_size', dest='batch_size', help='Number of images in each batch',
-                        default=2, type=int)
+                        default=1, type=int)
     parser.add_argument('--num_epoch', dest='num_epoch', help='Total number of epochs to run for training',
                         default=1000, type=int)
     parser.add_argument('--init_learning_rate', dest='init_learning_rate', help='Initial learning rate',
@@ -203,7 +208,11 @@ def parse_args():
                         default=0, type=float)
 
     parser.add_argument('--object', dest='object', help='object for data collection',
+                        default='chair_side_2_', type=str)
+
+    parser.add_argument('--label', dest='label', help='object label for data collection',
                         default='chair', type=str)
+
 
     config = parser.parse_args()
 
