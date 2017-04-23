@@ -14,7 +14,7 @@ from scipy.ndimage.filters import median_filter
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './chair/side_2'
+    data_dir = './table/table_7'
     result_dir = './results'
     resize_image_dir = './progress/JPEGImages'
     xml_path = './progress/Annotations'
@@ -36,8 +36,8 @@ def main(config):
                     
             elif config.stage is 2:
 
-                fn_img = [data_dir+'/001.jpg', data_dir+'/031.jpg']
-                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/031.png']
+                fn_img = [data_dir+'/001.jpg', data_dir+'/039.jpg']
+                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/039.png']
                 config.batch_size = len(fn_img)
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
@@ -103,14 +103,16 @@ def main(config):
         saver = tf.train.Saver(max_to_keep=2)
 
         if config.training:
-            ckpt = tf.train.get_checkpoint_state('./checkpoint')
+            ckpt = tf.train.get_checkpoint_state('./pretrained_checkpoint')
         else:
             ckpt = tf.train.get_checkpoint_state('./checkpoint')
 
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
-            #saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
+            if config.training:
+                saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
+            else:
+                saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
             print('[*] Success to read {}'.format(ckpt_name))
         else:
             if config.training:
@@ -208,10 +210,10 @@ def parse_args():
                         default=0, type=float)
 
     parser.add_argument('--object', dest='object', help='object for data collection',
-                        default='chair_side_2_', type=str)
+                        default='table_7_', type=str)
 
     parser.add_argument('--label', dest='label', help='object label for data collection',
-                        default='chair', type=str)
+                        default='table', type=str)
 
 
     config = parser.parse_args()
