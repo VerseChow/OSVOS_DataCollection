@@ -9,13 +9,14 @@ from scipy.signal import medfilt
 from PIL import Image
 import subprocess
 from scipy.ndimage.filters import median_filter
-
+import cv2
 #default resolution is 640*480
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './table/table_7'
+    data_dir = './table/table_9'
     result_dir = './results'
+    train_result_dir = './train_results'
     resize_image_dir = './progress/JPEGImages'
     xml_path = './progress/Annotations'
     txt_path = './progress/ImageSets/Main'
@@ -36,9 +37,12 @@ def main(config):
                     
             elif config.stage is 2:
 
-                fn_img = [data_dir+'/001.jpg', data_dir+'/039.jpg']
-                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/039.png']
+                fn_img = [data_dir+'/001.jpg', data_dir+'/067.jpg']
+                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/067.png']
                 config.batch_size = len(fn_img)
+
+            if not os.path.exists(train_result_dir):
+                os.makedirs(train_result_dir)
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
             logits, loss = build_model(x, y, reuse = None, training = config.training)
@@ -127,21 +131,26 @@ def main(config):
             total_count = 0
             t0 = time.time()
             for epoch in range(config.num_epoch):
-                
 
                 lr = config.init_learning_rate * config.learning_rate_decay**epoch
-                
-                
+
                 for k in range(len(fn_seg) // config.batch_size):
                     
-                    l_train, _ = sess.run([loss, train_step], feed_dict={learning_rate: lr})
+                    l_train, train_result, _ = sess.run([loss, pred_train, train_step], feed_dict={learning_rate: lr})
                     
+                    if total_count<= 100:
+                        train_result = reshape(train_result[0], (480, 640))
+                        train_result = around(median_filter(train_result, 9))
+                        train_result = 255*train_result
+                        imsave(train_result_dir+'/'+str(total_count)+'.png', train_result)
+
                     writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
                     total_count += 1                
                     m, s = divmod(time.time() - t0, 60)
                     h, m = divmod(m, 60)
                     print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
                     % (epoch+1, config.num_epoch, k+1, len(fn_seg) // config.batch_size, h, m, s, l_train))
+
 
                 if epoch % 100 == 0:
                     print('Saving checkpoint ...')
@@ -170,7 +179,14 @@ def main(config):
                     img_name = os.path.splitext(img_name)[0]
                     print('Evaluate picture %d/%d :: BBox size is height:[%d, %d] width:[%d, %d]' % (k+1, len(fn_img), 
                         slice_x.start, slice_x.stop, slice_y.start, slice_y.stop))
-                    imsave(result_dir+'/'+img_name+'.png', result)
+                    
+                    result = cv2.cvtColor(result, cv2.COLOR_GRAY2RGB)
+
+                    vis = concatenate((image[0], result), axis=0)
+
+                    cv2.rectangle(vis,(slice_y.start,slice_x.start),(slice_y.stop,slice_x.stop),(0,255,0),3)
+
+                    imsave(result_dir+'/'+img_name+'.jpg', vis)
 
                     img_path = resize_image_dir+'/'+config.object+time.strftime("%d_%m_%Y")+'_'+str(count)+'.jpg'
 
@@ -210,7 +226,7 @@ def parse_args():
                         default=0, type=float)
 
     parser.add_argument('--object', dest='object', help='object for data collection',
-                        default='table_7_', type=str)
+                        default='table_9_', type=str)
 
     parser.add_argument('--label', dest='label', help='object label for data collection',
                         default='table', type=str)
