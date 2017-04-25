@@ -4,7 +4,7 @@ import time, os
 import argparse
 import glob
 from numpy import *
-from scipy.misc import imsave,imshow 
+from scipy.misc import imsave,imshow,imresize
 from scipy.signal import medfilt
 from PIL import Image
 import subprocess
@@ -37,8 +37,8 @@ def main(config):
                     
             elif config.stage is 2:
 
-                fn_img = [data_dir+'/001.jpg', data_dir+'/067.jpg']
-                fn_seg = [data_dir+'/gt/001.png', data_dir+'/gt/067.png']
+                fn_img = [data_dir+'/001.jpg']
+                fn_seg = [data_dir+'/gt/001.png']
                 config.batch_size = len(fn_img)
 
             if not os.path.exists(train_result_dir):
@@ -138,10 +138,16 @@ def main(config):
                     
                     l_train, train_result, _ = sess.run([loss, pred_train, train_step], feed_dict={learning_rate: lr})
                     
-                    if total_count<= 100:
+                    if total_count<= 200:
                         train_result = reshape(train_result[0], (480, 640))
                         train_result = around(median_filter(train_result, 9))
                         train_result = 255*train_result
+                        train_result[(train_result>0)] = 255
+                        
+                        gt_seg = imresize(imread(data_dir+'/gt/001.png'),(480, 640))
+                        
+                        train_result = concatenate((gt_seg, train_result), axis = 0)
+                        train_result[(train_result>0)] = 255
                         imsave(train_result_dir+'/'+str(total_count)+'.png', train_result)
 
                     writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
