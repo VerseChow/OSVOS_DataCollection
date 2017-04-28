@@ -13,3 +13,5 @@ Output: Segmentation for Each Frame, Bounding Box information
 1. Train with Feed first frame into FCN network to extract the feature of the object wanted to be segmented until loss get down a threshold
 2. Feed in the rest vedio frames to get segmentation of the object and Bounding Box information of the object.
 
+We have a demo video on youtube, please click link: [OSVOS Data Collection](https://www.youtube.com/watch?v=xKtegsclTI8)
+
