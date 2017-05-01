@@ -6,7 +6,6 @@ import glob
 from numpy import *
 from scipy.misc import imsave,imshow,imresize
 from scipy.signal import medfilt
-from PIL import Image
 import subprocess
 from scipy.ndimage.filters import median_filter
 import cv2
@@ -23,51 +22,42 @@ def main(config):
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
-        if not config.edge_training:
-            print('\nLoading data from '+data_dir)
-            fn_img = []
-            fn_seg = []
-            if config.stage is 1:
-                with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
-                    for line in f:
-                        
-                            i,s = line.split(' ')
-                            fn_img.append(data_dir+i)
-                            fn_seg.append(data_dir+s[:-1])
-                    
-            elif config.stage is 2:
+        print('\nLoading data from '+data_dir)
+        fn_img = []
+        fn_seg = []
+        if config.stage is 1:
+            with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
+                for line in f:                   
+                    i,s = line.split(' ')
+                    fn_img.append(data_dir+i)
+                    fn_seg.append(data_dir+s[:-1])
+                
+        elif config.stage is 2:
 
-                fn_img = [data_dir+'/001.jpg']
-                fn_seg = [data_dir+'/gt/001.png']
-                config.batch_size = len(fn_img)
+            fn_img = [data_dir+'/001.jpg']
+            fn_seg = [data_dir+'/gt/001.png']
+            config.batch_size = len(fn_img)
 
-            if not os.path.exists(train_result_dir):
-                os.makedirs(train_result_dir)
+        if not os.path.exists(train_result_dir):
+            os.makedirs(train_result_dir)
 
-            y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
-            logits, loss = build_model(x, y, reuse = None, training = config.training)
-            tf.summary.scalar('loss', loss)
-            y = tf.to_int64(y, name = 'y')
-            pred_train = tf.to_int64(logits, name = 'pred_train')
-            result_train = tf.concat([y, pred_train], axis=2)
-            result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 640*2, 1]), tf.uint8)
-            tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
-            num_param = 0
-            vars_trainable = tf.trainable_variables()
-            for var in vars_trainable:
-                num_param += prod(var.get_shape()).value
-                tf.summary.histogram(var.name, var)
+        y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
+        logits, loss = build_model(x, y, reuse = None, training = config.training)
+        tf.summary.scalar('loss', loss)
+        y = tf.to_int64(y, name = 'y')
+        pred_train = tf.to_int64(logits, name = 'pred_train')
+        result_train = tf.concat([y, pred_train], axis=2)
+        result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 640*2, 1]), tf.uint8)
+        tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
+        num_param = 0
+        vars_trainable = tf.trainable_variables()
+        for var in vars_trainable:
+            num_param += prod(var.get_shape()).value
+            tf.summary.histogram(var.name, var)
 
-            print('\nTotal nummber of parameters = %d' % num_param)
+        print('\nTotal nummber of parameters = %d' % num_param)
 
-            train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, var_list=vars_trainable)
-            
-            
-        else:
-            label_pattern = './Data/edge_image'
-            image_pattern = './Data/VOC2010/JPEGImages'
-            images, labels = load_edge_image(label_pattern, image_pattern)
-            images_val, labels_val = load_edge_image(label_pattern, image_pattern)
+        train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, var_list=vars_trainable)
         
     else:
         print('\nLoading data from '+data_dir)
@@ -212,8 +202,7 @@ def main(config):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='OSVOS_demo')
-    parser.add_argument('--edge', dest='edge_training', help='set edge_flag, default is False',
-                        default=False, type=str2bool)
+
     parser.add_argument('--train', dest='training', help='set train_flag, default is True',
                         default=True, type=str2bool)
     parser.add_argument('--stage', dest='stage', help='set train_stage, default is 1',
@@ -230,10 +219,8 @@ def parse_args():
                         default='0', type=str)
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
                         default=0, type=float)
-
-    parser.add_argument('--object', dest='object', help='object for data collection',
+    parser.add_argument('--object', dest='object', help='img saved name for data collection',
                         default='table_9_', type=str)
-
     parser.add_argument('--label', dest='label', help='object label for data collection',
                         default='table', type=str)
 

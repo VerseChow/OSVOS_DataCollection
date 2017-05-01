@@ -27,28 +27,6 @@ def numericalSort(value):
     parts[1::2] = map(int, parts[1::2])
     return parts
 
-def load_images(pattern):
-    fn = sorted(glob(pattern))
-    if 'images' in pattern:
-        img = zeros((len(fn), 480, 854, 3), dtype=uint8)
-        for k in range(len(fn)):
-            img1 = imread(fn[k])
-            img1 = imresize(img1, (480, 854,3))
-            img[k,...] = img1
-    else:
-        img = zeros((len(fn), 480, 854), dtype=uint8)
-        for k in range(len(fn)):
-            pimg = imread(fn[k])
-            if len(pimg.shape) == 3:
-                img1 = pimg[:,:,0]
-                img1 = imresize(img1, (480, 854))
-                img[k, ...] = img1
-            else:
-                img1 = imresize(pimg, (480, 854))
-                img[k,...] = img1
-
-    return img
-
 def load_edge_image(label_pattern, image_pattern):
     list_of_label = sorted(glob(label_pattern+'/*.png'))
     list_of_image = sorted(glob(image_pattern+'/*.jpg'))
@@ -95,7 +73,6 @@ def input_pipeline(fn_seg, fn_img, batch_size, training = True):
         seg = tf.reshape(seg, [480, 640])
         
     if training is True:
-        #print 'shuffle!!!!!!!!!!!!!!!!!!!!!!!!!'
         with tf.variable_scope('shuffle'):
             seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
                                                 num_threads=4,
