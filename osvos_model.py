@@ -14,6 +14,11 @@ class OSVOS_model():
         self.img_width = img_width
         self.img_height = img_height
         self.batch_size = config.batch_size
+        self.init_learning_rate = config.init_learning_rate
+        self.learning_rate_decay = config.learning_rate_decay
+        self.num_epoch = config.num_epoch
+        self.saved_name = config.saved_name
+        self.label = config.label
 
     def input_pipeline(self, fn_seg, fn_img):
         reader = tf.WholeFileReader()      
@@ -68,8 +73,8 @@ class OSVOS_model():
         return x[:,start1:end1,start2:end2, 0:16]
 
     def chk_point_restore(self, sess):
-    	saver = tf.train.Saver(max_to_keep=2)
-    	if self.training:
+        saver = tf.train.Saver(max_to_keep=2)
+        if self.training:
             ckpt = tf.train.get_checkpoint_state(self.pretrained_weight_path)
         else:
             ckpt = tf.train.get_checkpoint_state(self.weight_path)
@@ -87,7 +92,7 @@ class OSVOS_model():
             else:
                 raise ValueError('[*] Failed to find a checkpoint.')
 
-        return saver
+        self.saver = saver
 
     def build_model(self, x, y):
 
@@ -205,10 +210,14 @@ class OSVOS_model():
         print('\nTotal nummber of parameters = %d' % num_param)
 
         train_step = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss, var_list=vars_trainable)
-        
-        return loss, sum_all, train_step, pred_train
 
-    def OSVOS_training(self, sess, config, path_pack, loss, sum_all, train_step, pred_train, saver):
+        self.loss = loss
+        self.sum_all = sum_all
+        self.train_step = train_step
+        self.pred_train = pred_train
+        
+
+    def OSVOS_training(self, sess, path_pack):
 
         total_count = 0
         t0 = time.time()
@@ -218,13 +227,13 @@ class OSVOS_model():
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
 
-        for epoch in range(config.num_epoch):
+        for epoch in range(self.num_epoch):
 
-            lr = config.init_learning_rate * config.learning_rate_decay**epoch
+            lr = self.init_learning_rate * self.learning_rate_decay**epoch
 
-            for k in range(self.batch_size // config.batch_size):
+            for k in range(self.batch_size // self.batch_size):
                 
-                l_train, train_result, _ = sess.run([loss, pred_train, train_step], feed_dict={self.learning_rate: lr})
+                l_train, train_result, _ = sess.run([self.loss, self.pred_train, self.train_step], feed_dict={self.learning_rate: lr})
                 
                 if total_count<= 200:
                     train_result = reshape(train_result[0], (480, 640))
@@ -239,17 +248,17 @@ class OSVOS_model():
                     
                     imsave(path_pack.train_result_dir+'/'+str(total_count)+'.png', train_result)
 
-                writer.add_summary(sess.run(sum_all, feed_dict={self.learning_rate: lr}), total_count)
+                writer.add_summary(sess.run(self.sum_all, feed_dict={self.learning_rate: lr}), total_count)
                 total_count += 1                
                 m, s = divmod(time.time() - t0, 60)
                 h, m = divmod(m, 60)
                 print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
-                % (epoch+1, config.num_epoch, k+1, self.batch_size // config.batch_size, h, m, s, l_train))
+                % (epoch+1, self.num_epoch, k+1, self.batch_size // self.batch_size, h, m, s, l_train))
 
 
             if epoch % 100 == 0:
                 print('Saving checkpoint ...')
-                saver.save(sess, self.weight_path + '/Davis.ckpt')
+                self.saver.save(sess, self.weight_path + '/Davis.ckpt')
 
         coord.request_stop()         
         coord.join(threads)
@@ -266,15 +275,16 @@ class OSVOS_model():
         val_result = tf.cast(tf.reshape(val_result, [-1, self.img_height, self.img_width, 1]), tf.uint8)
         input_image = tf.cast(x, tf.uint8)
 
-    	return val_result, x
+        self.val_result = val_result
+        self.x = x
 
-    def OSVOS_testing(self, sess, config, path_pack, fn_img, val_result, x):
+    def OSVOS_testing(self, sess, path_pack, fn_img):
 
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
         total_count = 1
         for k in range(len(fn_img)):
-            result, image = sess.run([val_result, x])
+            result, image = sess.run([self.val_result, self.x])
 
             result = reshape(result, (self.img_height, self.img_width))
             result = around(median_filter(result, 9))
@@ -300,18 +310,20 @@ class OSVOS_model():
 
                 imsave(path_pack.result_dir+'/'+img_name+'.jpg', vis)
 
-                img_path = path_pack.resize_image_dir+'/'+config.object+time.strftime("%d_%m_%Y")+'_'+str(total_count)+'.jpg'
+                img_path = path_pack.resize_image_dir+'/'+self.saved_name+time.strftime("%d_%m_%Y")+'_'+str(total_count)+'.jpg'
 
                 imsave(img_path, image[0])
                 total_count += 1
-                bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, config.label)
+                bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, self.label)
                 print('Writing .XML File!')
                 write_xml(img_path, path_pack.xml_path, bbox)
 
         coord.request_stop()         
         coord.join(threads)
-        print('Writing .txt File!')
-        write_txt(resize_image_dir, txt_path, 'train', config.object)
+        print('Writing train.txt File!')
+        write_txt(path_pack.resize_image_dir, path_pack.txt_path, 'train', self.saved_name)
+        print('Writing test.txt File!')
+        write_txt(path_pack.resize_image_dir, path_pack.txt_path, 'test', self.saved_name)
         print('Writing Done!')
 
 

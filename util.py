@@ -25,12 +25,13 @@ class bbox_property():
         self.ymax = str(ymax)
 
 class path_pack():
-    data_dir = './table/table_9'
-    result_dir = './results'
-    train_result_dir = './train_results'
-    resize_image_dir = './progress/JPEGImages'
-    xml_path = './progress/Annotations'
-    txt_path = './progress/ImageSets/Main'
+    def __init__(self, config):
+        self.data_dir = config.train_test_dataset
+        self.result_dir = './results'
+        self.train_result_dir = './train_results'
+        self.resize_image_dir = './'+config.dataset+'/JPEGImages'
+        self.xml_path = './'+config.dataset+'/Annotations'
+        self.txt_path = './'+config.dataset+'/ImageSets/Main'
 
     def check_path(self):
 
@@ -86,13 +87,27 @@ def write_txt(datapath, writepath, set_name, label):
     if not os.path.exists(writepath):
             os.makedirs(writepath)
     
-    im_list = sorted(glob(datapath+'/*'+label+'*.jpg'), key=numericalSort)
-    
-    with open(writepath+'/'+set_name+'.txt', 'w') as f:
-        for im in im_list:
-            im = os.path.basename(im)
-            im = os.path.splitext(im)[0]
-            f.write(im+'\n')
+
+    if set_name == 'train':
+        im_list = sorted(glob(datapath+'/*'+label+'*.jpg'), key=numericalSort)
+        
+        with open(writepath+'/'+set_name+'.txt', 'w') as f:
+            for im in im_list:
+                im = os.path.basename(im)
+                im = os.path.splitext(im)[0]
+                f.write(im+'\n')
+    elif set_name == 'test':
+        with open(writepath+'/'+set_name+'.txt', 'w') as f:
+            f.write('\n')
+    else:
+        try:
+            assert set_name == 'train' or set_name == 'test'
+        except ValueError:
+            print 'set_name must be train or test!!'
+
+
+
+
 
 def write_xml(file_name, writepath, bbox):
 
