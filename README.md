@@ -15,13 +15,13 @@ Output: Segmentation for Each Frame, Bounding Box information, Pascal VOC folder
 
 We have a demo video on youtube, please click link: [OSVOS Data Collection](https://www.youtube.com/watch?v=xKtegsclTI8)
 
-##Usage
+## Usage
 
 There are two script files to run this tool. Please run the script file one by one. The first one is oneshot_training.sh, the second one is data_collection.sh.
 
 Before run the scripts, please do following things.
 
-###oneshot_training.sh
+### oneshot_training.sh
 1. Inculde pretrained model into pretrained_checkpoint folder. For the model please contact [me](ywchow@umich.edu)
 2. In the dataset you want to train, please specify the folder structure like following:
 	<Folder Name>
@@ -34,7 +34,7 @@ Before run the scripts, please do following things.
 4. The model after oneshot_training will be saved in checkpoint folder.
 5. The example to use oneshot_training.sh is like: ./oneshot_training.sh ./table/table_9 "001". The first argument is dataset directory to train, the second argument is name of the picture to train.
 
-###data_collection.sh
+### data_collection.sh
 1. The example to use data_collection.sh is like: ./data_collection.sh ./table/table_9 progress. The first argument is dataset directory to collect, and the second argument will be the name of the output well structured dataset.
 2. The script will create a folder in the ROOT_Folder. It has following folder structured just like Pascal VOC dataset.
 	<Folder Name> (like progress in example)
