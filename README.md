@@ -22,7 +22,7 @@ There are two script files to run this tool. Please run the script file one by o
 Before run the scripts, please do following things.
 
 ### oneshot_training.sh
-1. Inculde pretrained model into pretrained_checkpoint folder. For the model please contact [me](ywchow@umich.edu)
+1. Inculde pretrained model into pretrained_checkpoint folder. For the model please contact me (ywchow@umich.edu)
 2. In the dataset you want to train, please specify the folder structure like following:
 ```
 	<Folder Name>
