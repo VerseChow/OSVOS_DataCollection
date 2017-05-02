@@ -24,12 +24,12 @@ Before run the scripts, please do following things.
 ### oneshot_training.sh
 1. Inculde pretrained model into pretrained_checkpoint folder. For the model please contact [me](ywchow@umich.edu)
 2. In the dataset you want to train, please specify the folder structure like following:
-	'''
+```
 	<Folder Name>
 	|\*.jpg	     
 	|	<gt> 
 	|	|\*.png 
-	'''
+```
 	image in gt folder is the groundtruth segmentation corresponding to the jpg image the previous level of folder.
 3. Please install [GIMP Image Editor](https://www.gimp.org/) tool. You could use it to get get groundtruth. You could insert the .jpg image and manually cropping out the groundtruth segmentation and save it in gt folder as a .png image.
 4. The model after oneshot_training will be saved in checkpoint folder.
@@ -38,6 +38,7 @@ Before run the scripts, please do following things.
 ### data_collection.sh
 1. The example to use data_collection.sh is like: ./data_collection.sh ./table/table_9 progress. The first argument is dataset directory to collect, and the second argument will be the name of the output well structured dataset.
 2. The script will create a folder in the ROOT_Folder. It has following folder structured just like Pascal VOC dataset.
+```
 	<Folder Name> (like progress in example)
 	|	Annotations
 	|	|*.xml
@@ -47,4 +48,5 @@ Before run the scripts, please do following things.
 	|	|	|train.txt
 	|	JPEGImages
 	|	|*.jpg
+```
 3. The default image size saved in new created dataset is 640*480. If you want to specify the size please go through main.py for detail or any other customized options. 
