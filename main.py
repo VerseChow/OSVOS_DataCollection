@@ -62,7 +62,7 @@ def parse_args():
     parser.add_argument('--gpu', dest='gpu', help='GPU to be used',
                         default='0', type=str)
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
-                        default=0.5, type=float)
+                        default=0.9, type=float)
     parser.add_argument('--saved_name', dest='saved_name', help='image saved name for data collection',
                         default='table_9_', type=str)
     parser.add_argument('--label', dest='label', help='object label for data collection',
