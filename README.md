@@ -30,10 +30,10 @@ Before run the scripts, please do following things.
 	|	<gt> 
 	|	|\*.png 
 ```
-	image in gt folder is the groundtruth segmentation corresponding to the jpg image the previous level of folder.
-3. Please install [GIMP Image Editor](https://www.gimp.org/) tool. You could use it to get get groundtruth. You could insert the .jpg image and manually cropping out the groundtruth segmentation and save it in gt folder as a .png image.
-4. The model after oneshot_training will be saved in checkpoint folder.
-5. The example to use oneshot_training.sh is like: ./oneshot_training.sh ./table/table_9 "001". The first argument is dataset directory to train, the second argument is name of the picture to train.
+3. image in gt folder is the groundtruth segmentation corresponding to the jpg image the previous level of folder.
+4. Please install [GIMP Image Editor](https://www.gimp.org/) tool. You could use it to get get groundtruth. You could insert the .jpg image and manually cropping out the groundtruth segmentation and save it in gt folder as a .png image.
+5. The model after oneshot_training will be saved in checkpoint folder.
+6. The example to use oneshot_training.sh is like: ./oneshot_training.sh ./table/table_9 "001". The first argument is dataset directory to train, the second argument is name of the picture to train.
 
 ### data_collection.sh
 1. The example to use data_collection.sh is like: ./data_collection.sh ./table/table_9 progress. The first argument is dataset directory to collect, and the second argument will be the name of the output well structured dataset.
