@@ -27,7 +27,7 @@ Before run the scripts, please do following things.
 ```
 	<Folder Name>
 	|\*.jpg	     
-	|	<gt> 
+	|	gt 
 	|	|\*.png 
 ```
 3. image in gt folder is the groundtruth segmentation corresponding to the jpg image the previous level of folder.
