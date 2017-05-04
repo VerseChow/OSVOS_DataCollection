@@ -26,9 +26,9 @@ Before run the scripts, please do following things.
 2. In the dataset you want to train, please specify the folder structure like following:
 ```
 	<Folder Name>
-	|\*.jpg	     
+	|*.jpg	     
 	|	gt 
-	|	|\*.png 
+	|	|*.png 
 ```
 3. image in gt folder is the groundtruth segmentation corresponding to the jpg image the previous level of folder.
 4. Please install [GIMP Image Editor](https://www.gimp.org/) tool. You could use it to get get groundtruth. You could insert the .jpg image and manually cropping out the groundtruth segmentation and save it in gt folder as a .png image.
