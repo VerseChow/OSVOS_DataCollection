@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument('--batch_size', dest='batch_size', help='Number of images in each batch',
                         default=1, type=int)
     parser.add_argument('--num_epoch', dest='num_epoch', help='Total number of epochs to run for training',
-                        default=1000, type=int)
+                        default=500, type=int)
     parser.add_argument('--init_learning_rate', dest='init_learning_rate', help='Initial learning rate',
                         default=1e-5, type=float)
     parser.add_argument('--learning_rate_decay', dest='learning_rate_decay', help='Ratio for decaying the learning rate after each epoch',
@@ -62,7 +62,7 @@ def parse_args():
     parser.add_argument('--gpu', dest='gpu', help='GPU to be used',
                         default='0', type=str)
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
-                        default=0.5, type=float)
+                        default=0.9, type=float)
     parser.add_argument('--saved_name', dest='saved_name', help='image saved name for data collection',
                         default='table_9_', type=str)
     parser.add_argument('--label', dest='label', help='object label for data collection',

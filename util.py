@@ -64,6 +64,8 @@ def str2bool(parameter):
 def bbox_generate(image):
 
     mask = image>0
+    max_index = 0
+    max_size = 0
 
     label_im, nb_labels = ndimage.label(mask)
 
@@ -75,10 +77,15 @@ def bbox_generate(image):
     label_im[remove_pixel] = 0
     labels = unique(label_im)
 
-    label_im = searchsorted(labels, label_im)
-    
+    for i in labels:
+        if i > 0:
+            set_size = sum(label_im==i)
+            if set_size>max_size:
+                max_index = i
+                max_size = set_size
+
     # Now that we have only one connect component, extract it's bounding box
-    slice_x, slice_y = ndimage.find_objects(label_im==1)[0] #find the largest one
+    slice_x, slice_y = ndimage.find_objects(label_im == max_index)[0] #find the largest one
 
     return slice_x, slice_y 
 
@@ -91,13 +98,13 @@ def write_txt(datapath, writepath, set_name, label):
     if set_name == 'train':
         im_list = sorted(glob(datapath+'/*'+label+'*.jpg'), key=numericalSort)
         
-        with open(writepath+'/'+set_name+'.txt', 'w') as f:
+        with open(writepath+'/'+set_name+'.txt', 'a+') as f:
             for im in im_list:
                 im = os.path.basename(im)
                 im = os.path.splitext(im)[0]
                 f.write(im+'\n')
     elif set_name == 'test':
-        with open(writepath+'/'+set_name+'.txt', 'w') as f:
+        with open(writepath+'/'+set_name+'.txt', 'a+') as f:
             f.write('\n')
     else:
         try:
