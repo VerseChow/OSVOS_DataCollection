@@ -1,4 +1,6 @@
 from util import *
+from tensorflow.python.ops import gen_nn_ops
+from tensorflow.python.framework import ops
 
 class OSVOS_model():
 
@@ -56,6 +58,15 @@ class OSVOS_model():
                     kernel_initializer=tf.constant_initializer(kernel),
                     bias_initializer=tf.constant_initializer(bias),
                     name='conv2d', trainable = self.training)
+            x = tf.layers.batch_normalization(x, name='batchnorm')
+            return tf.nn.relu(x, name='relu')
+
+    def conv_relu(self, x, num_filters, ksize=3, stride=2, name='upconv'):
+        with tf.variable_scope(name):
+            x = tf.layers.conv2d(x, num_filters, ksize, stride,
+                    padding='same', use_bias=False, reuse=self.reuse,
+                    name='conv2d', trainable = self.training)
+            x = tf.layers.batch_normalization(x, name='batchnorm')
             return tf.nn.relu(x, name='relu')
 
     def upconv_relu(self, x, num_filters, ksize=3, stride=2, name='upconv'):
@@ -63,7 +74,37 @@ class OSVOS_model():
             x = tf.layers.conv2d_transpose(x, num_filters, ksize, stride,
                     padding='same', use_bias=False, reuse=self.reuse,
                     name='conv2d_transpose', trainable = self.training)
+            x = tf.layers.batch_normalization(x, name='batchnorm')
             return tf.nn.relu(x, name='relu')
+
+    def max_pooling(self, x, ksize=2, strides=2, padding='SAME', name='maxpool'):
+        with tf.variable_scope(name):
+            x, argmax_indices = tf.nn.max_pool_with_argmax(x, ksize=[1,ksize,ksize,1],
+                                strides=[1,strides,strides,1], padding=padding,
+                                name=name)
+            return x, argmax_indices
+
+    def up_sample(self, x, argmax, ksize=[1, 2, 2, 1], name='upsample'):
+        with tf.variable_scope(name):
+            input_shape = x.get_shape().as_list()
+            #  calculation new shape
+            output_shape = (input_shape[0], input_shape[1] * ksize[1], input_shape[2] * ksize[2], input_shape[3])
+            # calculation indices for batch, height, width and feature maps
+        
+            one_like_mask = tf.ones_like(argmax)
+            batch_range = tf.reshape(tf.range(output_shape[0], dtype=tf.int64), shape=[input_shape[0], 1, 1, 1])
+            b = one_like_mask * batch_range
+            h = argmax // (output_shape[2] * output_shape[3])
+            w = argmax % (output_shape[2] * output_shape[3]) // output_shape[3]
+            feature_range = tf.range(output_shape[3], dtype=tf.int64)
+            f = one_like_mask * feature_range
+            # transpose indices & reshape update values to one dimension
+            updates_size = tf.size(x)
+            indices = tf.transpose(tf.reshape(tf.stack([b, h, w, f]), [4, updates_size]))
+            values = tf.reshape(x, [updates_size])
+            ret = tf.scatter_nd(indices, values, output_shape)
+            return ret
+
 
     def img_croping(self, x):
         start1 = (x.shape[1]-self.img_height)/2
@@ -105,77 +146,101 @@ class OSVOS_model():
             conv1 = self.conv_relu_vgg(conv1, name='conv1_2')
 
             # 112 224
-            pool1 = tf.layers.max_pooling2d(conv1, 2, 2, name='pool1')
+            #pool1 = tf.layers.max_pooling2d(conv1, 2, 2, name='pool1')
+            pool1, max1 = self.max_pooling(conv1, 2, 2, name='pool1')
             conv2 = self.conv_relu_vgg(pool1, name='conv2_1')
             conv2 = self.conv_relu_vgg(conv2, name='conv2_2')
 
             # 56 112
-            pool2 = tf.layers.max_pooling2d(conv2, 2, 2, name='pool2')
+            #pool2 = tf.layers.max_pooling2d(conv2, 2, 2, name='pool2')
+            pool2, max2 = self.max_pooling(conv2, 2, 2, name='pool2')
             conv3 = self.conv_relu_vgg(pool2, name='conv3_1')
             conv3 = self.conv_relu_vgg(conv3, name='conv3_2')
             conv3 = self.conv_relu_vgg(conv3, name='conv3_3')
 
             # 28 56
-            pool3 = tf.layers.max_pooling2d(conv3, 2, 2, name='pool3')
+            #pool3 = tf.layers.max_pooling2d(conv3, 2, 2, name='pool3')
+            pool3, max3 = self.max_pooling(conv3, 2, 2, name='pool3')
             conv4 = self.conv_relu_vgg(pool3, name='conv4_1')
             conv4 = self.conv_relu_vgg(conv4, name='conv4_2')
             conv4 = self.conv_relu_vgg(conv4, name='conv4_3')
 
             # 14 28
-            pool4 = tf.layers.max_pooling2d(conv4, 2, 2, name='pool4')
+            #pool4 = tf.layers.max_pooling2d(conv4, 2, 2, name='pool4')
+            pool4, max4 = self.max_pooling(conv4, 2, 2, name='pool4')
             conv5 = self.conv_relu_vgg(pool4, name='conv5_1')
             conv5 = self.conv_relu_vgg(conv5, name='conv5_2')
             conv5 = self.conv_relu_vgg(conv5, name='conv5_3')
-     
-            prep2 = tf.layers.conv2d(inputs = conv2, filters = 16, kernel_size = 3, strides = 1,
-                    padding='same', use_bias=True, reuse=self.reuse,
-                    name='prep2', trainable = self.training)
-            prep3 = tf.layers.conv2d(inputs = conv3, filters = 16, kernel_size = 3, strides = 1,
-                    padding='same', use_bias=True, reuse=self.reuse,
-                    name='prep3', trainable = self.training)
-            prep4 = tf.layers.conv2d(inputs = conv4, filters = 16, kernel_size = 3, strides = 1,
-                    padding='same', use_bias=True, reuse=self.reuse,
-                    name='prep4', trainable = self.training)              
-            prep5 = tf.layers.conv2d(inputs = conv5, filters = 16, kernel_size = 3, strides = 1,
-                    padding='same', use_bias=True, reuse=self.reuse,
-                    name='prep5', trainable = self.training)       
 
-            #upsampling
-            up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
-                    padding='valid', use_bias=False, reuse=self.reuse,
-                    name='up2', trainable = self.training)
-            up2c = self.img_croping(up2)
+            up1 = self.up_sample(conv5, max4)
+            upconv1 = self.conv_relu(up1, 256, ksize=3, stride=1, name='upconv1_1')
+            upconv1 = self.conv_relu(upconv1, 256, ksize=3, stride=1, name='upconv1_2')
+            upconv1 = self.conv_relu(upconv1, 256, ksize=3, stride=1, name='upconv1_3')
+            
+            up2 = self.up_sample(upconv1, max3)
+            upconv2 = self.conv_relu(up2, 128, ksize=3, stride=1, name='upconv2_1')
+            upconv2 = self.conv_relu(upconv2, 128, ksize=3, stride=1, name='upconv2_2')
+            upconv2 = self.conv_relu(upconv2, 128, ksize=3, stride=1, name='upconv2_3')
+            
+            up3 = self.up_sample(upconv2, max2)
+            upconv3 = self.conv_relu(up3, 64, ksize=3, stride=1, name='upconv3_1')
+            upconv3 = self.conv_relu(upconv3, 64, ksize=3, stride=1, name='upconv3_2')
+            
+            up4 = self.up_sample(upconv3, max1)
+            upconv4 = self.conv_relu(up4, 64, ksize=3, stride=1, name='upconv4_1')
+            upconv4 = self.conv_relu(upconv4, 64, ksize=3, stride=1, name='upconv4_2')
+            upconv4 = self.conv_relu(upconv4, 1, ksize=3, stride=1, name='upconv4_3')
+            
 
-            up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
-                    padding='valid', use_bias=False, reuse=self.reuse,
-                    name='up3', trainable = self.training)
-            up3c = self.img_croping(up3)
-
-            up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
-                    padding='valid', use_bias=False, reuse=self.reuse,
-                    name='up4', trainable = self.training)
-            up4c = self.img_croping(up4)
-
-            up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
-                    padding='valid', use_bias=False, reuse=self.reuse,
-                    name='up5', trainable = self.training)
-            up5c = self.img_croping(up5)
-
-                
-            concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
-
-            out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
-                    padding='same', use_bias=False, reuse=self.reuse,
-                    name='out_prep', trainable = self.training)  
+#            prep2 = tf.layers.conv2d(inputs = conv2, filters = 16, kernel_size = 3, strides = 1,
+#                    padding='same', use_bias=True, reuse=self.reuse,
+#                    name='prep2', trainable = self.training)
+#            prep3 = tf.layers.conv2d(inputs = conv3, filters = 16, kernel_size = 3, strides = 1,
+#                    padding='same', use_bias=True, reuse=self.reuse,
+#                    name='prep3', trainable = self.training)
+#            prep4 = tf.layers.conv2d(inputs = conv4, filters = 16, kernel_size = 3, strides = 1,
+#                    padding='same', use_bias=True, reuse=self.reuse,
+#                    name='prep4', trainable = self.training)              
+#            prep5 = tf.layers.conv2d(inputs = conv5, filters = 16, kernel_size = 3, strides = 1,
+#                    padding='same', use_bias=True, reuse=self.reuse,
+#                    name='prep5', trainable = self.training)       
+#
+#            #upsampling
+#            up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
+#                    padding='valid', use_bias=False, reuse=self.reuse,
+#                    name='up2', trainable = self.training)
+#            up2c = self.img_croping(up2)
+#
+#            up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
+#                    padding='valid', use_bias=False, reuse=self.reuse,
+#                    name='up3', trainable = self.training)
+#            up3c = self.img_croping(up3)
+#
+#            up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
+#                    padding='valid', use_bias=False, reuse=self.reuse,
+#                    name='up4', trainable = self.training)
+#            up4c = self.img_croping(up4)
+#
+#            up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
+#                    padding='valid', use_bias=False, reuse=self.reuse,
+#                    name='up5', trainable = self.training)
+#            up5c = self.img_croping(up5)
+#
+#                
+#            concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
+#
+#            out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
+#                    padding='same', use_bias=False, reuse=self.reuse,
+#                    name='out_prep', trainable = self.training)  
             
             threshold = tf.constant(self.threshold, dtype = float32)
 
             #filter based on threshold
-            out1 = tf.floordiv(tf.sigmoid(out_prep), threshold, name=None)
-            
+            out1 = tf.floordiv(tf.sigmoid(upconv4), threshold, name=None)
+            #out1 = tf.sigmoid(upconv4)
             out = tf.reshape(out1,[-1, self.img_height, self.img_width],name='out')
             
-            logits = tf.reshape(out_prep, [-1, self.img_height, self.img_width])
+            logits = tf.reshape(upconv4, [-1, self.img_height, self.img_width])
 
             loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                    logits=logits, labels=tf.to_float(y)),name = "loss")
@@ -221,6 +286,11 @@ class OSVOS_model():
 
         total_count = 0
         t0 = time.time()
+
+        if os.path.exists('./logs'):
+            import  shutil
+            shutil.rmtree('./logs')
+
 
         writer = tf.summary.FileWriter("./logs", sess.graph)
 
