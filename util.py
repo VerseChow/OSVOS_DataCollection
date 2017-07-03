@@ -51,7 +51,15 @@ def numericalSort(value):
     parts = numbers.split(value)
     parts[1::2] = map(int, parts[1::2])
     return parts
-     
+
+def ReadTextFile(txt_path, image_path, ext):
+    with open(txt_path) as f:
+        content = f.readlines()
+    content = [x.strip('\n') for x in content]
+    if image_path[-1] is '/':
+        return [image_path+'/'+x+'.'+ext for x in content]
+    if image_path[-1] is not '/':
+        return [image_path+'/'+x+'.'+ext for x in content]
         
 def str2bool(parameter):
     if parameter.lower() in ('yes', 'true', 't', 'y', '1'):
